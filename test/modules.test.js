@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePostcode, lookupOutcode, jitter, resolveLocation } from '../src/postcode.js';
-import { normalizeVibe, normalizeVibes, MAX_VIBES } from '../public/js/vibes.js';
-import { buildGraph, topVibes } from '../public/js/graph-model.js';
-import { normalizeAvatar, randomAvatar, renderAvatar, AVATAR_DIMENSIONS, DEFAULT_AVATAR } from '../public/js/avatar.js';
+import { normalizeAvatar, randomAvatar, animalLabel, ANIMALS, COLORS } from '../public/js/animals.js';
+import { classify, groups, forecast, dominant, VIBES } from '../public/js/weather.js';
+import { project } from '../public/js/geo.js';
 import { lanAddresses } from '../src/network.js';
 import { loadEnvFile } from '../src/env.js';
 import fs from 'node:fs';
@@ -52,65 +52,79 @@ test('resolveLocation stores what was typed, places known districts only', () =>
   assert.equal(resolveLocation('not a postcode', 1).lat, null);
 });
 
-test('normalizeVibe / normalizeVibes', () => {
-  assert.equal(normalizeVibe('  AI   Safety '), 'ai safety');
-  assert.equal(normalizeVibe('#Techno'), 'techno');
-  assert.equal(normalizeVibe('x'.repeat(50)).length, 30);
-  assert.deepEqual(normalizeVibes(['Art', 'art ', '', 'Jazz', 3]), ['art', 'jazz']);
-  assert.equal(normalizeVibes(Array.from({ length: 20 }, (_, i) => `v${i}`)).length, MAX_VIBES);
-  assert.deepEqual(normalizeVibes('nope'), []);
-});
-
-test('buildGraph links guests by shared vibes', () => {
-  const { nodes, links } = buildGraph([
-    { id: 1, vibes: ['art', 'techno', 'chess'] },
-    { id: 2, vibes: ['art', 'techno'] },
-    { id: 3, vibes: ['chess'] },
-    { id: 4, vibes: [] },
-  ]);
-  assert.equal(nodes.length, 4);
-  assert.deepEqual(
-    links.map((l) => [l.source, l.target, l.shared]),
-    [[1, 2, ['art', 'techno']], [1, 3, ['chess']]],
-  );
-  assert.deepEqual(nodes.map((n) => n.degree), [2, 1, 1, 0]);
-  assert.deepEqual(topVibes([{ vibes: ['a', 'b'] }, { vibes: ['b'] }]), [
-    { vibe: 'b', count: 2 },
-    { vibe: 'a', count: 1 },
-  ]);
-});
-
-test('normalizeAvatar whitelists ids and fills defaults', () => {
-  assert.deepEqual(normalizeAvatar(null), { ...DEFAULT_AVATAR });
-  const a = normalizeAvatar({ animal: 'sloth', hat: '<script>', glasses: 'round', extra: 'x' });
-  assert.deepEqual(a, { animal: 'sloth', glasses: 'round', hat: DEFAULT_AVATAR.hat, bg: DEFAULT_AVATAR.bg });
-  assert.equal(AVATAR_DIMENSIONS.find((d) => d.key === 'animal').options.length, 15);
-});
-
-test('pre-spirit-animal avatars map to a stable animal and keep accessories', () => {
-  const old = { skin: 'honey', hair: 'buzz', hairColor: 'brown', glasses: 'shades', jewelry: 'none', piercing: 'none', hat: 'cap', bg: 'mint' };
+test('normalizeAvatar whitelists the zoo and maps old 2D avatars', () => {
+  assert.deepEqual(normalizeAvatar({ animal: 'lion', color: 'mint', hat: '<script>' }), { animal: 'lion', color: 'mint' });
+  // old ids under another name
+  assert.equal(normalizeAvatar({ animal: 'bunny' }).animal, 'rabbit');
+  assert.equal(normalizeAvatar({ animal: 'puppy' }).animal, 'dog');
+  // old ids that the zoo now has itself
+  assert.deepEqual(normalizeAvatar({ animal: 'axolotl', bg: 'sky' }), { animal: 'axolotl', color: 'blue' });
+  for (const id of ['parrot', 'sloth', 'redpanda']) assert.equal(normalizeAvatar({ animal: id }).animal, id);
+  // pre-spirit-animal avatars still get a stable, valid animal
+  const old = { skin: 'honey', hair: 'buzz', hat: 'cap', bg: 'mint' };
   const a = normalizeAvatar(old);
-  const animals = AVATAR_DIMENSIONS.find((d) => d.key === 'animal').options.map((o) => o.id);
-  assert.ok(animals.includes(a.animal));
+  assert.ok(ANIMALS.includes(a.animal) && COLORS.includes(a.color));
   assert.deepEqual(normalizeAvatar({ ...old }), a, 'same old spec -> same animal');
-  assert.deepEqual({ glasses: a.glasses, hat: a.hat, bg: a.bg }, { glasses: 'shades', hat: 'cap', bg: 'mint' });
-  const others = new Set(['afro', 'bob', 'locs', 'long', 'spiky', 'swept'].map((hair) => normalizeAvatar({ ...old, hair }).animal));
-  assert.ok(others.size > 1, 'different old avatars spread across animals');
-});
-
-test('every animal renders with every glasses and hat', () => {
-  const [animals, glasses, hats] = ['animal', 'glasses', 'hat'].map((k) => AVATAR_DIMENSIONS.find((d) => d.key === k).options);
-  for (const an of animals) {
-    for (const g of glasses) {
-      for (const h of hats) {
-        const svg = renderAvatar({ animal: an.id, glasses: g.id, hat: h.id, bg: 'teal' }, 64);
-        assert.match(svg, /^<svg[^>]+viewBox="0 0 240 240"[\s\S]*<\/svg>$/);
-        assert.ok(!/undefined|NaN/.test(svg), `${an.id}/${g.id}/${h.id}`);
-      }
-    }
+  for (const x of [null, 'nope', {}]) {
+    const n = normalizeAvatar(x);
+    assert.ok(ANIMALS.includes(n.animal) && COLORS.includes(n.color));
   }
   const r = randomAvatar();
   assert.deepEqual(normalizeAvatar(r), r);
+});
+
+test('the zoo has 66 animals, the same list the 2D and 3D engines draw', () => {
+  assert.equal(ANIMALS.length, 66);
+  assert.equal(new Set(ANIMALS).size, 66);
+  const src = (f) => fs.readFileSync(new URL(`../public/js/3d/${f}`, import.meta.url), 'utf8');
+  const kinds = src('ww-zoo.js').match(/Z\.kinds = \[([^\]]+)\]/)[1].match(/'([a-z]+)'/g).map((q) => q.slice(1, -1));
+  assert.deepEqual(kinds, ANIMALS);
+  for (const f of ['ww-zoo.js', 'ww-zoo3d.js']) {
+    const cases = new Set([...src(f).matchAll(/case '([a-z]+)':/g)].map((m) => m[1]));
+    assert.deepEqual(ANIMALS.filter((a) => !cases.has(a)), [], `${f} draws every animal`);
+  }
+  assert.equal(animalLabel('polarbear'), 'Polar bear');
+  assert.equal(animalLabel('redpanda'), 'Red panda');
+  assert.equal(animalLabel('axolotl'), 'Axolotl');
+});
+
+test('classify turns a secret into weather', () => {
+  const cases = {
+    'plays piano by ear and never learned to read music': 'creative',
+    "can't whistle, at all": 'rainy',
+    'can’t whistle (curly apostrophe)': 'rainy',
+    'ran a marathon dressed as a teapot': 'happy',
+    'hitchhiked from Lisbon to Istanbul': 'wander',
+    'speaks five languages and swears in seven': 'storm',
+    'ran a supper club out of a launderette': 'foodie',
+    'keeps bees on a rooftop': 'nature',
+    'has a twin nobody here has met': 'mist',
+  };
+  for (const [text, vibe] of Object.entries(cases)) assert.equal(classify(text), vibe, text);
+  assert.equal(classify(''), 'mist');
+  assert.ok(Object.keys(VIBES).every((k) => VIBES[k].sky.length === 2));
+});
+
+test('groups, dominant and forecast read the room', () => {
+  const s = [
+    { id: 1, vibe: 'happy', by: 'self' },
+    { id: 2, vibe: 'happy', by: 'friend' },
+    { id: 3, vibe: 'nature', by: 'friend' },
+  ];
+  const byVibe = groups(s, 'vibe');
+  assert.deepEqual(byVibe.map((g) => [g.key, g.count]), [['happy', 2], ['nature', 1]]);
+  assert.equal(byVibe[0].label, 'Giggly · Hilarious');
+  assert.deepEqual(groups(s, 'voice').map((g) => [g.label, g.count]), [['Overheard by friends', 2], ['In their own words', 1]]);
+  assert.equal(dominant(s), 'happy');
+  assert.equal(dominant([]), 'mist');
+  assert.equal(forecast(s), 'Tonight’s forecast: scattered giggles, with a fresh breeze from the great outdoors.');
+  assert.equal(forecast([]), 'Clear skies, for now.');
+});
+
+test('project puts Charing Cross at the origin, km east/north', () => {
+  assert.deepEqual(project(51.5074, -0.1278), [0, 0]);
+  const [x, y] = project(51.5074 + 1 / 110.57, -0.1278);
+  assert.ok(Math.abs(x) < 1e-9 && Math.abs(y - 1) < 1e-9);
 });
 
 test('loadEnvFile fills process.env from a file without overriding the shell', () => {

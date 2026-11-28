@@ -1,168 +1,80 @@
 // whoswho — local-network guest board.
-//   /home   rotating display (graph · map · needs) with a QR code to /hi
-//   /hi     guest registration
+//   /home   rotating display (3D map · the cloud · wishes) with a QR code to /hi
+//   /hi     join, then drop secrets and wishes from your phone
 //   /hax0r  admin
 
 import express from 'express';
-import QRCode from 'qrcode';
+import fs from 'node:fs/promises';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { openDb, publicGuest, ValidationError } from './src/db.js';
+import { openDb } from './src/node-db.js';
+import { createHandler } from './src/app.js';
 import { lanHost } from './src/network.js';
-import { adminAuth } from './src/auth.js';
-import { parsePostcode, lookupOutcode } from './src/postcode.js';
 import { loadEnvFile } from './src/env.js';
-import { VIBE_SUGGESTIONS } from './public/js/vibes.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const page = (name) => path.join(ROOT, 'pages', `${name}.html`);
 
 /**
+ * Node: static files from public/, everything else through the same handler
+ * the Cloudflare Worker runs (src/app.js).
  * @param {{db: ReturnType<typeof openDb>, getPort: () => number, adminPassword?: string}} opts
  */
 export function createApp({ db, getPort, adminPassword = process.env.ADMIN_PASSWORD }) {
+  // Where other devices should go. PUBLIC_URL wins; otherwise, a request that
+  // came through a tunnel or proxy (Cloudflare, ngrok…) uses that public
+  // address, so the QR works from outside the network; else the LAN address.
+  const baseUrl = (req) => {
+    const fixed = process.env.PUBLIC_URL?.replace(/\/+$/, '');
+    if (fixed) return fixed;
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const proto = req.headers.get('x-forwarded-proto')?.split(',')[0].trim();
+    if (host && /^https?$/.test(proto || '') && !/^(localhost|\[|\d+\.\d+\.\d+\.\d+)/.test(host)) return `${proto}://${host}`;
+    return `http://${lanHost()}:${getPort()}`;
+  };
+  const handler = createHandler({
+    db,
+    adminPassword,
+    baseUrl,
+    info: () => ({ host: lanHost(), port: getPort() }),
+    page: (name) => fs.readFile(path.join(ROOT, 'pages', `${name}.html`), 'utf8'),
+  });
+
   const app = express();
-  const admin = adminAuth(adminPassword);
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '32kb' }));
-
-  const urls = () => {
-    const base = `http://${lanHost()}:${getPort()}`;
-    return { base, hiUrl: `${base}/hi`, homeUrl: `${base}/home`, adminUrl: `${base}/hax0r` };
-  };
-
-  // ------------------------------------------------------------- live (SSE)
-  const clients = new Set();
-  const broadcast = (event, data) => {
-    const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const res of clients) res.write(msg);
-  };
-  const heartbeat = setInterval(() => {
-    for (const res of clients) res.write(': ping\n\n');
-  }, 25_000);
-  heartbeat.unref();
-  app.locals.closeClients = () => {
-    clearInterval(heartbeat);
-    for (const res of clients) res.end();
-    clients.clear();
-  };
-
-  app.get('/api/events', (req, res) => {
-    res.set({
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-    res.flushHeaders();
-    res.write('retry: 3000\n\n');
-    clients.add(res);
-    req.on('close', () => clients.delete(res));
-  });
-
-  // ------------------------------------------------------------------ pages
-  app.get('/', (_req, res) => res.redirect('/home'));
-  app.get('/home', (_req, res) => res.sendFile(page('home')));
-  app.get('/hi', (_req, res) => res.sendFile(page('hi')));
-  app.get('/hax0r', admin, (_req, res) => res.sendFile(page('hax0r')));
-
+  app.locals.closeClients = () => handler.close();
   app.use(express.static(path.join(ROOT, 'public'), { index: false }));
-  app.use('/vendor/d3', express.static(path.join(ROOT, 'node_modules/d3/dist')));
-  app.use('/vendor/leaflet', express.static(path.join(ROOT, 'node_modules/leaflet/dist')));
-  app.get('/data/london-boroughs.geojson', (_req, res) =>
-    res.type('application/geo+json').sendFile(path.join(ROOT, 'data/london-boroughs.geojson')),
-  );
+  app.get('/vendor/three.min.js', (_req, res) => res.sendFile(path.join(ROOT, 'node_modules/three/build/three.min.js')));
 
-  // ------------------------------------------------------------- public API
-  const parseId = (req) => {
-    const id = Number(req.params.id);
-    return Number.isInteger(id) && id > 0 ? id : null;
-  };
-
-  app.get('/api/guests', (_req, res) => res.json(db.listGuests().map(publicGuest)));
-
-  app.post('/api/guests', (req, res) => {
-    const guest = db.createGuest(req.body);
-    broadcast('guests', { type: 'created', guest: publicGuest(guest) });
-    res.status(201).json(publicGuest(guest));
-  });
-
-  app.get('/api/settings', (_req, res) => res.json(db.getSettings()));
-
-  // Suggestions for /hi: vibes guests already use (most popular first, so new
-  // guests overlap with people here), then the curated list.
-  app.get('/api/vibes', (_req, res) => {
-    const counts = new Map();
-    for (const g of db.listGuests()) for (const v of g.vibes) counts.set(v, (counts.get(v) || 0) + 1);
-    const used = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-    const rest = VIBE_SUGGESTIONS.filter((v) => !counts.has(v)).map((v) => [v, 0]);
-    res.json([...used, ...rest].map(([vibe, count]) => ({ vibe, count })));
-  });
-
-  app.get('/api/postcode/:pc', (req, res) => {
-    const parsed = parsePostcode(req.params.pc);
-    if (!parsed) return res.json({ valid: false, known: false });
-    const hit = lookupOutcode(parsed.outcode);
-    res.json({ valid: true, known: !!hit, outcode: parsed.outcode, area: hit?.area ?? null });
-  });
-
-  app.get('/api/info', (_req, res) =>
-    res.json({ ...urls(), host: lanHost(), port: getPort() }),
-  );
-
-  app.get('/api/qr.svg', async (_req, res) => {
-    const svg = await QRCode.toString(urls().hiUrl, {
-      type: 'svg',
-      margin: 1,
-      errorCorrectionLevel: 'M',
-      color: { dark: '#111111', light: '#ffffff' },
-    });
-    res.set('Cache-Control', 'no-store').type('image/svg+xml').send(svg);
-  });
-
-  // -------------------------------------------------------------- admin API
-  app.get('/api/admin/guests', admin, (_req, res) => res.json(db.listGuests()));
-
-  app.put('/api/admin/guests/:id', admin, (req, res) => {
-    const id = parseId(req);
-    const guest = id && db.updateGuest(id, req.body);
-    if (!guest) return res.status(404).json({ error: 'Guest not found' });
-    broadcast('guests', { type: 'updated', guest: publicGuest(guest) });
-    res.json(guest);
-  });
-
-  app.delete('/api/admin/guests/:id', admin, (req, res) => {
-    const id = parseId(req);
-    if (!id || !db.deleteGuest(id)) return res.status(404).json({ error: 'Guest not found' });
-    broadcast('guests', { type: 'deleted', id });
-    res.status(204).end();
-  });
-
-  app.delete('/api/admin/guests', admin, (req, res) => {
-    if (req.body?.confirm !== 'DELETE') {
-      return res.status(400).json({ error: 'Send {"confirm":"DELETE"} to remove every guest' });
+  // Node request -> fetch Request -> handler -> stream the Response back.
+  app.use(async (req, res, next) => {
+    try {
+      const ctrl = new AbortController();
+      res.on('close', () => ctrl.abort());
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers)) if (v != null) headers.set(k, Array.isArray(v) ? v.join(', ') : v);
+      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+      const request = new Request(`http://${req.headers.host || 'localhost'}${req.originalUrl}`, {
+        method: req.method,
+        headers,
+        body: hasBody ? Readable.toWeb(req) : undefined,
+        duplex: 'half',
+        signal: ctrl.signal,
+      });
+      const r = await handler.handle(request);
+      if (!r) return next();
+      res.status(r.status);
+      r.headers.forEach((v, k) => res.setHeader(k, v));
+      if (!r.body) return res.end();
+      res.flushHeaders();
+      const body = Readable.fromWeb(r.body);
+      res.on('close', () => body.destroy());
+      body.on('error', () => res.end());
+      body.pipe(res);
+    } catch (err) {
+      next(err);
     }
-    const deleted = db.deleteAllGuests();
-    broadcast('guests', { type: 'reset' });
-    res.json({ deleted });
   });
-
-  app.put('/api/settings', admin, (req, res) => {
-    const settings = db.updateSettings(req.body);
-    broadcast('settings', settings);
-    res.json(settings);
-  });
-
-  // ----------------------------------------------------------------- errors
-  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
-  app.use((err, _req, res, _next) => {
-    if (err instanceof ValidationError) return res.status(400).json({ error: err.message, field: err.field });
-    if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON' });
-    if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request too large' });
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong' });
-  });
-
   return app;
 }
 

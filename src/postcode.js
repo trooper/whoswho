@@ -2,12 +2,7 @@
 // Guests are deliberately placed at district level (plus a small deterministic
 // jitter) rather than at their exact postcode.
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
-const TABLE_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'outcodes.json');
-const OUTCODES = JSON.parse(readFileSync(TABLE_PATH, 'utf8'));
+import OUTCODES from '../data/outcodes.json' with { type: 'json' };
 
 const FULL_RE = /^([A-Z]{1,2}\d[A-Z\d]?)(\d[A-Z]{2})$/;
 const OUTCODE_RE = /^[A-Z]{1,2}\d[A-Z\d]?$/;

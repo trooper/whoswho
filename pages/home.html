@@ -4,41 +4,50 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Who's here?</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫧</text></svg>">
-  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+  <meta name="description" content="The zoo has come to London: every guest is a spirit animal on a 3D map.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Who's here?">
+  <meta property="og:description" content="The zoo has come to London: every guest is a spirit animal on a 3D map.">
+  <meta property="og:url" content="{{BASE}}/home">
+  <meta property="og:image" content="{{BASE}}/img/og-zoo.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A 3D paper model of London with a cartoon spirit animal for every guest">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="{{BASE}}/img/og-zoo.jpg">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦊</text></svg>">
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/home.css">
-  <script src="/vendor/d3/d3.min.js"></script>
-  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/vendor/three.min.js"></script>
+  <script src="/js/3d/ww-map.js"></script>
+  <script src="/js/3d/ww-zoo.js"></script>
+  <script src="/js/3d/ww-zoo3d.js"></script>
+  <script src="/js/3d/ww-life.js"></script>
+  <script src="/js/3d/ww-cloud.js"></script>
 </head>
 <body class="home">
-  <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
-  <header class="top">
-    <h1 id="title">Who's here?</h1>
-    <nav class="tabs" id="tabs" aria-label="Views"></nav>
-    <div class="count"><b id="count">0</b> <span id="count-label">here</span></div>
-  </header>
-
-  <main class="stage" id="stage">
-    <section class="view view-graph" id="view-graph" data-view="graph" aria-label="Connections"></section>
-    <section class="view view-map" id="view-map" data-view="map" aria-label="Map"></section>
-    <section class="view view-needs" id="view-needs" data-view="needs" aria-label="Needs"></section>
+  <div class="stage" id="stage">
+    <section class="view view-map" id="view-map" data-view="map" aria-label="The Map"></section>
+    <section class="view view-cloud" id="view-cloud" data-view="cloud" aria-label="The Cloud"></section>
+    <section class="view view-wishes" id="view-wishes" data-view="wishes" aria-label="Wishes"></section>
     <section class="view view-splash" id="view-splash" data-view="splash">
       <div class="splash-inner">
-        <h2>Be the first!</h2>
+        <p class="splash-kicker" id="splash-title">Who's here?</p>
+        <h2>The zoo opens when<br>the first guest arrives.</h2>
         <img class="splash-qr" src="/api/qr.svg" alt="QR code to the registration page">
-        <p>Scan to say hi &rarr; <span class="hi-url"></span></p>
+        <p>Scan to join &rarr; <span class="hi-url"></span></p>
       </div>
     </section>
-  </main>
 
-  <aside class="qr-corner" id="qr-corner">
-    <img src="/api/qr.svg" alt="QR code to the registration page" id="qr-img">
-    <div class="qr-caption"><b>Scan to say hi</b><span class="hi-url"></span></div>
-  </aside>
-
-  <div class="paused-badge" id="paused" hidden>⏸ Paused</div>
-  <div class="toasts" id="toasts" aria-live="polite"></div>
+    <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
+    <nav class="tabs" id="tabs" aria-label="Views"></nav>
+    <aside class="qr-corner" id="qr-corner">
+      <img src="/api/qr.svg" alt="QR code to the registration page" id="qr-img">
+      <div class="qr-caption"><b id="qr-title">Join the zoo</b><span id="qr-sub">Scan · pick your animal</span><span class="hi-url"></span></div>
+    </aside>
+    <div class="paused-badge" id="paused" hidden>Paused</div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+  </div>
 
   <script type="module" src="/js/home.js"></script>
 </body>

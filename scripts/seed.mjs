@@ -1,49 +1,67 @@
 #!/usr/bin/env node
-// Adds sample guests for demos/testing.  npm run seed [-- --clear] [-- --count N]
-// Writes straight to the DB file (DB_PATH from the env or .env, else ./whoswho.sqlite). A running server
-// picks the new guests up on its next request; refresh /home to see them.
+// Adds sample guests (with secrets and wishes) for demos/testing.
+//   npm run seed [-- --clear] [-- --count N] [-- --db FILE]
+// Writes to ./demo.sqlite by default, never the party database, so the real
+// board starts empty. `npm run demo` seeds it and serves it on port 3001.
+// Pass --db whoswho.sqlite only if you really want samples on the real board.
 
-import { openDb } from '../src/db.js';
-import { loadEnvFile } from '../src/env.js';
-import { randomAvatar } from '../public/js/avatar.js';
+import { openDb } from '../src/node-db.js';
+import { ANIMALS } from '../public/js/animals.js';
 
 const args = process.argv.slice(2);
 const clear = args.includes('--clear');
 const countIdx = args.indexOf('--count');
-const count = countIdx >= 0 ? Number(args[countIdx + 1]) : 20;
+const dbIdx = args.indexOf('--db');
+const DEMO_DB = 'demo.sqlite';
+const file = dbIdx >= 0 ? args[dbIdx + 1] : DEMO_DB;
 
+// [name, postcode district, pin colour, fun things [text, 'self'|'friend'], wish]
+// Everything is posted as said by the guest about themselves, like the phone does.
 const SAMPLES = [
-  ['Alex', ['techno', 'climbing', 'ai safety'], 'a climbing partner for Tuesday nights', 'E8 3PB', 'Infra engineer by day, boulderer by night. Usually found at a warehouse rave or worrying about AI alignment.'],
-  ['Sam', ['art', 'ceramics', 'natural wine'], 'studio space to share in east London', 'E2', 'Ceramicist with a tiny studio in Bethnal Green. Pottery, orange wine and long lunches.'],
-  ['Robin', ['ai safety', 'philosophy', 'chess', 'books'], 'someone to review my alignment paper draft', 'NW1', 'Research fellow working on interpretability. Will talk philosophy of mind until you beg me to stop.'],
-  ['Jordan', ['basketball', 'hip hop', 'startups'], 'a technical co-founder who loves sport', 'SE15 4QF', 'Ex-college point guard building a sports-tech startup. Hip hop on loud, always.'],
-  ['Charlie', ['scuba diving', 'travel', 'photography'], 'dive buddies for Egypt in March!', 'SW11', 'Freelance photographer chasing reefs and light. 200+ dives and counting.'],
-  ['Kai', ['martial arts', 'meditation', 'yoga'], null, 'N16', 'Muay Thai coach and part-time meditation teacher.'],
-  ['Riley', ['data science', 'open source', 'board games', 'ai safety'], 'help untangling a gnarly pandas pipeline', 'EC1V', 'Data scientist at a health charity, open source maintainer, board game hoarder.'],
-  ['Morgan', ['live music', 'jazz', 'vinyl', 'techno'], 'a +1 for Ronnie Scott\'s on Friday', 'W11', 'Jazz pianist moonlighting in a record shop. Vinyl over everything.'],
-  ['Jesse', ['cooking', 'baking', 'gardening'], 'sourdough starter (will trade for chilli plants)', 'SE22', 'Chef on a sabbatical, growing chillies on a south London balcony.'],
-  ['Quinn', ['surfing', 'wild swimming', 'climate'], null, 'TW1', 'Climate policy wonk who surfs badly and swims in the Thames year round.'],
-  ['Ash', ['film', 'theatre', 'poetry'], 'actors for a no-budget short film', 'N1', 'Writer-director making micro-budget films. Poetry nights on Thursdays.'],
-  ['Rowan', ['robotics', 'open source', 'startups', 'data science'], 'beta testers for a plant-watering robot', 'E14', 'Robotics engineer building a plant-watering robot in my spare room.'],
-  ['Sasha', ['dancing', 'house music', 'festivals', 'techno'], 'festival crew for Field Day', 'E9', 'Product designer who lives for Sunday afternoon house sets and festival season.'],
-  ['Remy', ['football', 'running', 'podcasts'], 'a 5-a-side team that needs a keeper', 'SW9', 'Sports journalist and podcast host. Sunday league keeper, Saturday parkrunner.'],
-  ['Nico', ['design', 'fashion', 'art', 'photography'], 'a photographer for a small lookbook shoot', 'W1D', 'Fashion designer and amateur photographer, launching my first small label.'],
-  ['Skye', ['anime', 'video games', 'knitting'], null, null, 'Animator. Knits while watching anime, games while it dries.'],
-  ['Avery', ['languages', 'travel', 'books', 'coffee'], 'Spanish conversation exchange, coffee on me', 'NW5', 'Translator (Spanish, Portuguese, Italian) who plans trips around coffee shops.'],
-  ['Jamie', ['stand-up comedy', 'podcasts', 'film'], 'an audience for my first open mic 😅', 'SE1', 'Comedy writer about to try my first open mic. Film nerd, podcast addict.'],
-  ['Frankie', ['volunteering', 'climate', 'gardening', 'cycling'], 'volunteers for a community garden build', 'CR0', 'Runs a community garden in Croydon. Cycles everywhere, volunteers a lot.'],
-  ['Ari', ['skateboarding', 'hip hop', 'art', 'vinyl'], 'somewhere to skate indoors in winter', 'HA0', 'Illustrator and skater. Hip hop, spray paint and dusty vinyl.'],
-  ['Eden', ['chess', 'board games', 'philosophy'], null, 'KT1', 'Maths teacher, chess club organiser, philosophy book club regular.'],
-  ['Billie', ['techno', 'djing', 'live music'], 'a warm-up slot at a small night', 'E5', 'Bedroom DJ trying to get my first proper gig. Techno, live music, more techno.'],
+  ['Maya', 'E8', 'pink', [['lived on a canal boat for three winters', 'friend'], ["can't whistle, at all", 'self']], 'a flat with an actual bath'],
+  ['Tom', 'N16', 'yellow', [['has been to 100 countries and is counting', 'friend']], 'someone to start a band with'],
+  ['Priya', 'SE15', 'blue', [['plays piano by ear and never learned to read music', 'friend'], ['ran a supper club out of a launderette', 'self']], 'eight hours of sleep, just once'],
+  ['Jonas', 'E2', 'mint', [['grew up on a goat farm in the Alps', 'self']], 'a reason to go back to Lisbon'],
+  ['Leila', 'SW9', 'orange', [['speaks five languages and swears in seven', 'friend']], 'a dog (the landlord says no)'],
+  ['Sam', 'NW5', 'pink', [['hitchhiked from Lisbon to Istanbul', 'friend'], ['built a sauna in a back garden', 'friend']], 'more sauna, less email'],
+  ['Ines', 'W11', 'blue', [['was an extra in a spy film', 'self']], "a tennis partner who won't go easy"],
+  ['Kofi', 'SE22', 'yellow', [['once cooked for 300 people at a festival', 'friend']], 'good sourdough within walking distance'],
+  ['Hana', 'N1', 'mint', [['keeps bees on a rooftop', 'friend'], ['has a twin nobody here has met', 'self']], 'to finally learn Spanish'],
+  ['Felix', 'E17', 'orange', [['learned to surf at forty', 'self']], 'fewer meetings'],
+  ['Zara', 'SW11', 'pink', [['DJed a wedding in a cave', 'friend']], 'a co-founder who loves maps'],
+  ['Oli', 'NW1', 'blue', [['worked on a cruise ship as a magician', 'friend']], 'a long walk with no phone'],
+  ['Noor', 'E14', 'yellow', [['swam across a lake at dawn on her birthday', 'friend']], 'somebody to cook for'],
+  ['Ben', 'SE10', 'mint', [['moved to London with one suitcase and a ukulele', 'self']], 'a garden, even a tiny one'],
+  ['Ana', 'N7', 'orange', [["collects old maps of cities she's never been to", 'friend']], 'a sabbatical'],
+  ['Marek', 'W6', 'pink', [["can solve a Rubik's cube in under a minute", 'friend']], 'one more summer like 2019'],
+  ['Chloe', 'SE1', 'blue', [['knows how to milk a camel', 'friend'], ['was a ballroom champion at twelve', 'friend']], 'a trip somewhere with no wifi'],
+  ['Dev', 'E5', 'yellow', [['wrote a whole novel, burned it, and is starting again', 'self']], 'an editor, or a deadline'],
+  ['Rosa', 'SW4', 'mint', [['has a tattoo of a tram', 'friend']], "a bike that doesn't get stolen"],
+  ['Luca', 'N4', 'orange', [['got stuck in a lift with a pop star', 'friend']], 'a proper Italian espresso in London'],
+  ['Yuki', 'W2', 'pink', [['ran a marathon dressed as a teapot', 'friend']], 'a quiet Sunday'],
+  ['Ade', 'SE5', 'blue', [['sleeps with socks on, even in August', 'friend']], 'people to play five-a-side with'],
 ];
+const count = countIdx >= 0 ? Number(args[countIdx + 1]) : SAMPLES.length;
 
-loadEnvFile(); // honour DB_PATH from .env
-const db = openDb();
+const db = openDb(file);
 if (clear) console.log(`cleared ${db.deleteAllGuests()} guests`);
+const made = [];
 for (let i = 0; i < count; i++) {
-  const [name, vibes, need, postcode, about] = SAMPLES[i % SAMPLES.length];
+  const [name, postcode, color, , need] = SAMPLES[i % SAMPLES.length];
   const suffix = i >= SAMPLES.length ? ` ${Math.floor(i / SAMPLES.length) + 1}` : '';
-  db.createGuest({ name: name + suffix, avatar: randomAvatar(), about, vibes, need, postcode });
+  made.push(db.createGuest({ name: name + suffix, avatar: { animal: ANIMALS[i % ANIMALS.length], color }, need, postcode }).guest);
 }
-console.log(`added ${count} sample guests → ${db.listGuests().length} total`);
+// A few guests send more than one lantern.
+const MORE_WISHES = { Maya: ['someone to share a canal walk with'], Tom: ['a drummer, specifically'], Hana: ['a Spanish conversation partner', 'more honey jars'], Sam: ['a reason to switch my phone off'] };
+for (const g of made) {
+  for (const text of MORE_WISHES[g.name] || []) db.addWish(db.raw.prepare('SELECT token FROM guests WHERE id = ?').get(g.id).token, text);
+}
+let secrets = 0;
+made.forEach((g, i) => {
+  for (const [text] of SAMPLES[i % SAMPLES.length][3]) {
+    db.addSecret({ text, aboutId: g.id, by: 'self', authorId: g.id });
+    secrets++;
+  }
+});
+console.log(`added ${count} sample guests and ${secrets} fun things → ${db.listGuests().length} guests total in ${file}`);
 db.close();

@@ -6,3 +6,8 @@ node_modules/
 
 # local config with secrets (see .env.example)
 .env
+
+# Cloudflare build output and local state
+dist/
+.wrangler/
+.dev.vars

@@ -1,12 +1,65 @@
+/* Fonts ship with the app (OFL, via Fontsource), so it works offline. */
 @font-face {
-  font-family: 'Bangers';
-  src: url('/fonts/Bangers.woff2') format('woff2');
+  font-family: 'Unbounded';
+  src: url('/fonts/unbounded-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Comic Neue';
-  src: url('/fonts/ComicNeue-Bold.woff2') format('woff2');
+  font-family: 'Unbounded';
+  src: url('/fonts/unbounded-latin-800-normal.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-latin-700-normal.woff2') format('woff2');
   font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-latin-800-normal.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-latin-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/caveat-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
   font-display: swap;
 }
 
@@ -16,24 +69,18 @@
 }
 
 :root {
-  --ink: #1f1a24;
-  --night: #15111d;
-  --night-2: #211b2e;
-  --night-3: #2e2640;
-  --paper: #fff8ec;
-  --cream: #fff1d6;
-  --pink: #ff4fa3;
-  --yellow: #ffbe0b;
-  --sun: #ffd23f;
-  --cyan: #3ec6e0;
-  --violet: #8b6cf6;
-  --green: #2fb36b;
-  --red: #e63946;
-  --muted: #8a8299;
-  --radius: 18px;
-  --display: 'Bangers', 'Impact', 'Arial Black', system-ui, sans-serif;
-  --comic: 'Comic Neue', 'Comic Sans MS', 'Chalkboard SE', system-ui, sans-serif;
-  --body: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ink: #2A1E16;
+  --paper: #FFFDF8;
+  --paper-2: #F6EEE2;
+  --tape: rgba(255, 216, 77, 0.75);
+  --brown: #8A6A52;
+  --rust: #C2553A;
+  --night: #0C0930;
+  --lilac: #C9C2F0;
+  --display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
+  --body: 'Figtree', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --hand: 'Caveat', 'Bradley Hand', cursive;
 }
 
 *,
@@ -75,7 +122,3 @@ button {
   white-space: nowrap;
 }
 
-.avatar-img {
-  display: block;
-  border-radius: 50%;
-}

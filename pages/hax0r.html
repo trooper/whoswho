@@ -6,8 +6,8 @@
   <title>hax0r · admin</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
   <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/css/form.css">
   <link rel="stylesheet" href="/css/admin.css">
+  <script src="/js/3d/ww-zoo.js"></script>
 </head>
 <body class="admin">
   <header class="ad-head">
@@ -22,14 +22,28 @@
     <section class="ad-card ad-guests">
       <div class="ad-card-head">
         <h2>Guests <span class="ad-pill" id="guest-count">0</span></h2>
-        <input type="search" id="filter" placeholder="Filter by name, vibe, need, postcode…" aria-label="Filter guests">
+        <input type="search" id="filter" placeholder="Filter by name, wish, postcode, animal…" aria-label="Filter guests">
       </div>
       <div class="ad-table-wrap">
         <table class="ad-table">
-          <thead><tr><th></th><th>Name</th><th>Vibes</th><th>Need</th><th>Location</th><th>Joined</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Name</th><th>Wish</th><th>Location</th><th>Fun things</th><th>Joined</th><th></th></tr></thead>
           <tbody id="guest-rows"></tbody>
         </table>
         <p class="ad-empty" id="empty" hidden>No guests yet. Share the QR on the display!</p>
+      </div>
+
+      <div class="ad-secrets">
+        <div class="ad-card-head">
+          <h2>Fun things <span class="ad-pill" id="secret-count">0</span></h2>
+        </div>
+        <p class="ad-dim">Anonymous on the display. Only you can see who sent each one; delete anything that isn't party-friendly.</p>
+        <div class="ad-table-wrap">
+          <table class="ad-table">
+            <thead><tr><th>Weather</th><th>Fun thing</th><th>About</th><th>Sent by</th><th>When</th><th></th></tr></thead>
+            <tbody id="secret-rows"></tbody>
+          </table>
+          <p class="ad-empty" id="secrets-empty" hidden>Nothing fun yet.</p>
+        </div>
       </div>
     </section>
 
@@ -41,9 +55,9 @@
           <label>Seconds per view <input type="number" name="rotateSeconds" min="3" max="600" step="1"></label>
           <fieldset>
             <legend>Views in rotation</legend>
-            <label class="ad-check"><input type="checkbox" name="views" value="graph"> Connections</label>
-            <label class="ad-check"><input type="checkbox" name="views" value="map"> Map</label>
-            <label class="ad-check"><input type="checkbox" name="views" value="needs"> Needs</label>
+            <label class="ad-check"><input type="checkbox" name="views" value="map"> The Map (3D zoo)</label>
+            <label class="ad-check"><input type="checkbox" name="views" value="cloud"> The Cloud (fun things)</label>
+            <label class="ad-check"><input type="checkbox" name="views" value="wishes"> Wishes (lanterns)</label>
           </fieldset>
           <div class="ad-form-foot"><button type="submit" class="ad-btn primary">Save</button><span class="ad-status" id="settings-status" role="status"></span></div>
         </form>
@@ -57,7 +71,7 @@
 
       <section class="ad-card ad-danger">
         <h2>Reset event</h2>
-        <p>Deletes <b>every</b> guest. Type <code>DELETE</code> to confirm.</p>
+        <p>Deletes <b>every</b> guest, fun thing and wish. Type <code>DELETE</code> to confirm.</p>
         <form id="reset-form" class="ad-reset">
           <input type="text" name="confirm" autocomplete="off" placeholder="DELETE" aria-label="Type DELETE to confirm">
           <button type="submit" class="ad-btn danger">Delete everyone</button>

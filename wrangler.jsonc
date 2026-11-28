@@ -1,0 +1,27 @@
+{
+  // whoswho at https://whoswho.hypermaps.world, on Cloudflare.
+  //
+  // Static files (dist/public, built from public/ by scripts/build-worker.mjs) are served as
+  // Workers Static Assets. Everything else goes to worker/index.js, which hands it to one Durable
+  // Object (Party): the guest board's SQLite data and every screen's live connection live there.
+  // The admin password is a secret: `npx wrangler secret put ADMIN_PASSWORD`.
+  "name": "whoswho",
+  "account_id": "5cf1a58ca9c0cd8433fa788991cfd921", // Hypermaps
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-09",
+
+  "build": { "command": "node scripts/build-worker.mjs" },
+  "assets": { "directory": "./dist/public" },
+  // pages/*.html are bundled into the Worker as text (the server fills in its address)
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+
+  "durable_objects": { "bindings": [{ "name": "PARTY", "class_name": "Party" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Party"] }],
+
+  // A custom domain: Cloudflare creates the DNS record and certificate for the subdomain.
+  "routes": [{ "pattern": "whoswho.hypermaps.world", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": { "enabled": true }
+}

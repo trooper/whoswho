@@ -1,20 +1,27 @@
-// Optional HTTP Basic auth for admin routes. Enabled only when ADMIN_PASSWORD is set.
+// HTTP Basic auth for admin routes, with Web Crypto only (runs on Node and on
+// Cloudflare Workers). Open when no password is set.
 
-import { timingSafeEqual, createHash } from 'node:crypto';
+const enc = new TextEncoder();
+const sha256 = async (s) => new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(String(s))));
 
-const digest = (s) => createHash('sha256').update(String(s)).digest();
+/** Compare digests so timing doesn't leak how much of the password matched. */
+async function same(a, b) {
+  const [x, y] = await Promise.all([sha256(a), sha256(b)]);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
 
-export function adminAuth(password = process.env.ADMIN_PASSWORD) {
-  if (!password) return (_req, _res, next) => next();
-  const expected = digest(password);
-  return (req, res, next) => {
-    const [scheme, encoded] = (req.headers.authorization || '').split(' ');
-    if (scheme === 'Basic' && encoded) {
-      const decoded = Buffer.from(encoded, 'base64').toString('utf8');
-      const pass = decoded.slice(decoded.indexOf(':') + 1);
-      if (timingSafeEqual(digest(pass), expected)) return next();
-    }
-    res.set('WWW-Authenticate', 'Basic realm="whoswho admin", charset="UTF-8"');
-    res.status(401).json({ error: 'Admin password required' });
-  };
+/** @returns {Promise<boolean>} whether this Authorization header may use admin routes */
+export async function checkAdmin(header, password) {
+  if (!password) return true;
+  const [scheme, encoded] = (header || '').split(' ');
+  if (scheme !== 'Basic' || !encoded) return false;
+  let decoded;
+  try {
+    decoded = new TextDecoder().decode(Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0)));
+  } catch {
+    return false;
+  }
+  return same(decoded.slice(decoded.indexOf(':') + 1), password);
 }
